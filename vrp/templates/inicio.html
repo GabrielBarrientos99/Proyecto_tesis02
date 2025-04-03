@@ -1,0 +1,143 @@
+{% extends 'layout.html' %}
+
+{% load filters %}
+
+{% block content %}
+<div class="bg-gray-800 rounded-lg shadow-md p-6 flex">
+    <!-- Panel de selección de instancia -->
+    <div class="w-1/4 bg-gray-200 p-3 rounded-lg shadow-lg">
+        <form method="get" action="{% url 'generar_grafico' %}">
+            <div class="mb-4">
+                <h1 class='text-lg text-sans font-bold text-gray-900 mb-4'>Generador de Gráficos</h1>
+                <label for="instancia" class="block text-gray-800 font-mono text-sm text-bold mb-2">Selecciona una instancia:</label>
+                <select name="instancia" id="instancia" class="text-sm bg-gray-200 text-red-900 font-sans p-3 rounded w-full border border-gray-600 focus:ring focus:ring-pink-500">
+                    {% for categoria, archivos in instancias.items %}
+                        {% if not categoria|endswith:'-sol' %}
+                            <optgroup label="{{ categoria }}" class="text-sm font-sans my-2">
+                                {% for archivo in archivos %}
+                                    {% if archivo|endswith:'.vrp' %}
+                                        <option value="{{ archivo }}" {% if archivo == selected_instance %}selected{% endif %}>
+                                            {{ archivo }}
+                                        </option>
+                                    {% endif %}
+                                {% endfor %}
+                            </optgroup>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="mb-4">
+                <label for="mostrar_solucion" class="text-sm block text-gray-800 font-mono mb-2">Mostrar solución:</label>
+                <div class="flex items-center">
+                    <input type="radio" id="si" name="mostrar_solucion" value="si" class="mr-2">
+                    <label for="si" class="text-sm text-gray-800 mr-4">Sí</label>
+                    <input type="radio" id="no" name="mostrar_solucion" value="no" class="mr-2">
+                    <label for="no" class="text-sm text-gray-800">No</label>
+                </div>
+            </div>
+            <div class="flex justify-center">
+                <button type="submit" class="text-sm bg-pink-600 hover:bg-pink-400 text-white font-bold py-2 px-4 rounded shadow-lg transition duration-300 ease-in-out transform hover:-translate-y-1 hover:scale-105">
+                    Generar Gráfico
+                </button>
+            </div>
+        </form>
+        <div id="instance-details" class="mt-6 p-4 bg-gray-100 rounded-lg shadow-md">
+            <h3 class="text-sm font-sans font-semibold mb-3 text-gray-800">Características de la Instancia</h3>
+            <br >
+            <p class="text-xs text-gray-600 font-mono mb-2"><strong>Archivo:</strong> {{ selected_instance }}</p>
+            <p class="text-xs text-gray-600 font-mono mb-2"><strong>Número de Clientes:</strong> {{ instance_info.num_clientes }}</p>
+            <p class="text-xs text-gray-600 font-mono mb-2"><strong>Capacidad del Vehículo:</strong> {{ instance_info.capacidad }}</p>
+            <p class="text-xs text-gray-600 font-mono mb-2"><strong>Número de Vehículos:</strong> {{ instance_info.num_vehiculos }}</p>
+        </div>
+    </div>
+    <!-- Sección para mostrar la imagen de la solución -->
+    <div class="w-3/4 ml-6">
+        {% if file_path %}
+        <div class="flex flex-col items-center border-2 border-dashed border-gray-300 ">
+            <div class="flex justify-center items-center mb-2 mt-2">
+                <label for="toggleGraphSolution" class="flex items-center cursor-pointer">
+                    <!-- toggle -->
+                    <div class="relative">
+                        <!-- input -->
+                        <input id="toggleGraphSolution" type="checkbox" class="sr-only" onchange="toggleGraphSolution()">
+                        <!-- line -->
+                        <div class="block bg-gray-600 w-12 h-6 rounded-full"></div>
+                        <!-- dot -->
+                        <div class="dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform duration-300"></div>
+                    </div>
+                    <!-- label -->
+                    <div class="text-sm ml-3 text-white font-medium">
+                        Alternar Gráfico/Solución
+                    </div>
+                </label>
+            </div>
+            <div id="imagen-container" class="w-full h-full border-gray-300 flex items-center justify-center overflow-hidden">
+                <div class = 'mx-4 mb-4'>
+                    <img id="graphImage" src="/static/{{ file_path }}" alt="Gráfico CVRP" class="mx-auto shadow-lg rounded-lg cursor-pointer zoom">
+                    {% if solution_file_path %}
+                        <img id="solutionImage" src="/static/{{ solution_file_path }}" alt="Solución CVRP" class="mx-auto shadow-lg rounded-lg hidden zoom">
+                    {% endif %}
+                </div>
+            </div>            
+        </div>
+        {% else %}
+            <div id="imagen-container" class="w-full h-full border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden">
+                <p class="text-gray-500 text-sm">No se ha seleccionado una instancia</p>
+            </div>
+        {% endif %}
+        
+        
+        
+
+    </div>
+</div>
+
+<script>
+    function toggleGraphSolution() {
+        const graphImage = document.getElementById('graphImage');
+        const solutionImage = document.getElementById('solutionImage');
+        const toggle = document.getElementById('toggleGraphSolution');
+        const dot = document.querySelector('.dot');
+    
+        if (toggle.checked) {
+            graphImage.classList.add('hidden');
+            if (solutionImage) {
+                solutionImage.classList.remove('hidden');
+            }
+            dot.style.transform = 'translateX(24px)';
+        } else {
+            graphImage.classList.remove('hidden');
+            if (solutionImage) {
+                solutionImage.classList.add('hidden');
+            }
+            dot.style.transform = 'translateX(0)';
+        }
+    }
+    
+    document.addEventListener("DOMContentLoaded", function() {
+        const toggle = document.getElementById('toggleGraphSolution');
+        const dot = document.querySelector('.dot');
+        if (toggle.checked) {
+            dot.style.transform = 'translateX(24px)';
+        } else {
+            dot.style.transform = 'translateX(0)';
+        }
+        toggle.addEventListener('change', function() {
+            if (this.checked) {
+                dot.style.transform = 'translateX(24px)';
+            } else {
+                dot.style.transform = 'translateX(0)';
+            }
+        });
+    });
+    </script>
+    <style>
+        .zoom {
+            transition: transform 0.5s ease; /* Aplica la transición en el estado normal */
+        }
+        .zoom:hover {
+            transform: scale(1.2);
+            z-index: 10;
+        }
+    </style>
+{% endblock %}

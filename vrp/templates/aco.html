@@ -1,0 +1,98 @@
+{% extends 'layout.html' %}
+{% load filters %}
+{% block title %}Algoritmo de Colonia de Hormigas (CVRP){% endblock %}
+
+{% block content %}
+<div class="bg-gray-800 rounded-lg shadow-md p-6 flex">
+    <!-- Panel de selección de instancia y parámetros -->
+    <div class="mx-6 w-1/4 bg-gray-100 rounded-lg shadow-lg p-4">
+        <h1 class="text-lg font-sans text-bold text-gray-700 mb-2">Algoritmo de Colonia de Hormigas (CVRP)</h1>
+        <form method="post" class="bg-gray-200 p-4 rounded-lg shadow-lg" onsubmit="showLoading()">
+            {% csrf_token %}
+            <div class="mb-3">
+                <label for="instancia" class="block text-gray-800 text-sm font-mono mb-1">Selecciona una instancia:</label>
+                <select name="instancia" id="instancia" class="bg-gray-200 text-gray-800 text-sm font-sans p-2 rounded w-full border border-gray-600 focus:ring focus:ring-pink-500">
+                    {% for categoria, archivos in instancias.items %}
+                        <optgroup label="{{ categoria }}" class="font-sans text-sm my-1">
+                            {% for archivo in archivos %}
+                                {% if archivo|endswith:'.vrp' %}
+                                    <option value="{{ archivo }}" {% if archivo == selected_instance %}selected{% endif %}>
+                                        {{ archivo }}
+                                    </option>
+                                {% endif %}
+                            {% endfor %}
+                        </optgroup>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="mb-3">
+                <label for="num_ants" class="block text-gray-800 text-sm font-mono mb-1">Número de Hormigas:</label>
+                <input type="number" name="num_ants" id="num_ants" value="{{ num_ants }}" class="bg-gray-200 text-gray-800 font-sans p-2 rounded w-full border border-gray-600 focus:ring focus:ring-pink-500">
+            </div>
+            <div class="mb-3">
+                <label for="max_iter" class="block text-gray-800 text-sm font-mono mb-1">Máximo de Iteraciones:</label>
+                <input type="number" name="max_iter" id="max_iter" value="{{ max_iter }}" class="bg-gray-200 text-gray-800 font-sans p-2 rounded w-full border border-gray-600 focus:ring focus:ring-pink-500">
+            </div>
+            <div class="mb-3">
+                <label for="alpha" class="block text-gray-800 text-sm font-mono mb-1">Valor de Alpha:</label>
+                <input type="number" step="0.1" name="alpha" id="alpha" value="{{ alpha }}" class="bg-gray-200 text-gray-800 font-sans p-2 rounded w-full border border-gray-600 focus:ring focus:ring-pink-500">
+            </div>
+            <div class="mb-3">
+                <label for="beta" class="block text-gray-800 text-sm font-mono mb-1">Valor de Beta:</label>
+                <input type="number" step="0.1" name="beta" id="beta" value="{{ beta }}" class="bg-gray-200 text-gray-800 font-sans p-2 rounded w-full border border-gray-600 focus:ring focus:ring-pink-500">
+            </div>
+            <div class="mb-3">
+                <label for="evaporation_rate" class="block text-gray-800 text-sm font-mono mb-1">Tasa de Evaporación:</label>
+                <input type="number" step="0.01" name="evaporation_rate" id="evaporation_rate" value="{{ evaporation_rate }}" class="bg-gray-200 text-gray-800 font-sans p-2 rounded w-full border border-gray-600 focus:ring focus:ring-pink-500">
+            </div>
+            <div class="mb-3 flex items-center">
+                <input type="checkbox" name="mostrar_proceso" id="mostrar_proceso" class="mr-2" {% if mostrar_proceso %}checked{% endif %}>
+                <label for="mostrar_proceso" class="text-sm text-gray-800">Mostrar Proceso</label>
+            </div>
+            <div class="flex justify-between">
+                <button id="submit-button" type="submit" class="text-sm bg-pink-600 hover:bg-pink-400 text-white font-bold py-2 px-4 rounded shadow-lg transition duration-300 ease-in-out transform hover:-translate-y-1 hover:scale-105">
+                    Ejecutar Algoritmo
+                </button>
+                <button id="loading-button" type="button" class="flex bg-indigo-500 text-white font-bold py-2 px-4 rounded shadow-lg transition duration-300 ease-in-out transform hover:-translate-y-1 hover:scale-105 hidden" disabled>
+                    <svg class="animate-spin h-5 w-5 mr-3" viewBox="0 0 24 24">
+                        <circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="4" fill="none" />                    
+                    </svg>
+                    <span>Procesando...</span>
+                </button>
+            </div>
+        </form>
+    </div>
+    <!-- Sección para mostrar la imagen de la solución -->
+    <div class="w-3/4 mx-4">
+        {% if file_path %}
+            <div class="w-full h-full border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden">
+                <div class="mb-4">
+                    <h2 class="text-lg font-mono mb-2 px-4">Resultado</h2>
+                    <img src="/static/{{ file_path }}" alt="Gráfico del Mejor Resultado" class="px-4 mx-auto shadow-lg rounded-lg mb-4 zoom">
+                    <p class="text-sm px-4"><strong>Mejor Costo Total:</strong> {{ best_cost }}</p>
+                </div>
+            </div>
+        {% else %}
+            <div id="imagen-container" class="w-full h-full border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden">
+                <p class="text-gray-500 text-sm">No se ha seleccionado una instancia</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function showLoading() {
+    document.getElementById('submit-button').classList.add('hidden');
+    document.getElementById('loading-button').classList.remove('hidden');
+}
+</script>
+<style>
+    .zoom {
+        transition: transform 0.5s ease;
+    }
+    .zoom:hover {
+        transform: scale(1.2);
+        z-index: 10;
+    }
+</style>
+{% endblock %}

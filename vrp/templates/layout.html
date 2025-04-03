@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}CVRP Visualizer{% endblock %}</title>
+    {% load static %}
+    <!-- Tailwind CSS CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="{% static 'css/style.css' %}" rel="stylesheet">
+</head>
+<!-- Encabezado -->
+<header class="bg-gray-800 text-white py-3 shadow-md">
+    <div class="container mx-auto px-4 flex justify-between items-center">
+        <h1 class="text-2xl font-bold">CVRP Visualizer</h1>
+        <nav>
+            <ul class="flex space-x-6">
+                <li>
+                    <a href="{% url 'inicio' %}" class="text-sm text-bold text-white hover:text-gray-300">Inicio</a>
+                </li>
+                <li>
+                    <a href="{% url 'algoritmo_genetico' %}" class="text-sm text-bold text-white hover:text-gray-300">Algoritmo Genético</a>
+                </li>
+                <li>
+                    <a href="{% url 'aco' %}" class="text-sm text-bold text-white hover:text-gray-300">ACO</a>
+                </li>
+                <li>
+                    <a href="{% url 'run_automation' %}" class="text-sm text-bold text-white hover:text-gray-300">Resultados</a>
+                </li>
+                <li>
+                    <a href="{% url 'seleccionar_instancias' %}" class="text-sm text-bold text-white hover:text-gray-300">Automatizacion</a>
+                </li>
+            </ul>
+        </nav>
+    </div>
+</header>
+
+<body class="bg-gray-200 text-gray-200">    
+
+    <!-- Contenido Principal -->
+    <main class="container mx-auto px-4 py-8">
+        {% block content %}
+        <!-- El contenido de las subplantillas se inyectará aquí -->
+        {% endblock %}
+    </main>
+
+</body>
+<!-- Pie de página -->
+<footer class="bg-gray-900 text-white py-2 mt-8">
+    <div class="container mx-auto px-4 text-center">
+        <p class='text-sm'>&copy; 2024 CVRP Visualizer. Todos los derechos reservados.</p>
+    </div>
+</footer>
+</html>

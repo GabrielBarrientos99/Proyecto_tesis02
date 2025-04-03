@@ -1,0 +1,3 @@
+# Evitamos el enviroment
+# de python
+.venv

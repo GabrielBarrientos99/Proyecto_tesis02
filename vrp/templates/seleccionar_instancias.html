@@ -1,0 +1,363 @@
+{% extends 'layout.html' %}
+{% load static %}
+{% load filters %}
+{% block content %}
+<div class="container mx-auto p-4">
+    <div class="flex flex-row -mx-4">
+        <!-- Sección 1: Selección y agregado de instancias -->
+        <div class="md:w-1/3 p-4 bg-gray-100 rounded-lg shadow-lg mb-6 md:mb-0 md:mr-4 flex-shrink-0">
+            <h2 class="text-2xl font-sans font-bold mb-4 text-gray-800">Agregar Instancia</h2>
+            <div class="mb-4">
+                <label for="instancia-select" class="block text-lg text-gray-700 font-sans mb-2">Instancia:</label>
+                <!-- Select para seleccionar una instancia -->
+                <select id="instancia-select" class="w-full text-sm p-3 rounded border border-gray-400 bg-white text-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-500">
+                    {% for categoria, archivos in instancias.items %}
+                        {% if not categoria|endswith:'-sol' %}
+                        <optgroup label="{{ categoria }}" class="font-sans my-2">
+                            {% for archivo in archivos %}
+                                {% if archivo|endswith:'.vrp' %}
+                                    <option value="{{ archivo }}" {% if archivo == selected_instance %}selected{% endif %}>
+                                        {{ archivo }}
+                                    </option>
+                                {% endif %}
+                            {% endfor %}
+                        </optgroup>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+            <!-- Botón para agregar la instancia seleccionada -->
+            <button id="agregar-instancia" class="w-full p-3 text-sm bg-gray-700 text-white rounded hover:bg-gray-800">Agregar Instancia</button>
+
+            <!-- Contenedor para los parámetros AG -->
+            <div id="parametros-container" class="mt-4">
+                <div class="grid grid-cols-3 gap-4">
+                    {% for param in parametros %}
+                        <div class="parametros-set mb-6 p-4 border rounded shadow bg-white">
+                            <div class="mb-4">
+                                <label class="block text-gray-800 font-bold font-mono text-xs mb-2">Población: 
+                                    <span class="text-pink-500">{{ param.population_size }}</span>
+                            </div>
+                            <div class="mb-4">
+                                <label class="block text-gray-800 font-mono text-xs  mb-2">Generaciones: 
+                                    <span class="text-pink-500">{{ param.num_generations }}</span>
+                                </label>
+                            </div>
+                            <div class="mb-4">
+                                <label class="block text-gray-800 font-mono text-xs  mb-2">Rate:
+                                    <span class="text-pink-500">{{ param.mutation_rate }}</span>
+                                </label>
+                            </div>
+                            <div class="mb-4">
+                                <label class="block text-gray-800 font-mono text-xs  mb-2">Elitismo:
+                                    <span class="text-pink-500">{{ param.use_elitism }}</span>
+                                </label>
+                            </div>
+                            <div class="mb-4">
+                                <label class="block text-gray-800 font-mono text-xs  mb-2">Gready:
+                                    <span class="text-pink-500">{{ param.gready }}</span>
+                                </label>
+                            </div>
+                            <div class="mb-4">
+                                <label class="block text-gray-800 font-mono text-xs  mb-2">Homogenia:
+                                    <span class="text-pink-500">{{ param.homogenia }}</span>                                    
+                                </label>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Sección 2: Listado de instancias seleccionadas e imagen -->
+        <div class="md:w-1/3 p-4 bg-gray-100 rounded-lg shadow-lg mb-6 md:mb-0 md:mr-4 flex-shrink-0">
+            <h2 class="text-lg font-semibold font-sans mb-4 text-gray-800">Instancias Seleccionadas</h2>
+            <!-- Lista donde se mostrarán las instancias seleccionadas -->
+            <div id="lista-instancias" class="mb-4 text-sm text-red-800 grid grid-cols-1 gap-4">
+                <!-- Las instancias seleccionadas aparecerán aquí -->
+            </div>
+            <!-- Contenedor para mostrar la imagen -->
+            <div id="imagen-contenedor" class="w-full h-64 border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden">
+                {% if instance_info %}
+                    <img src="{{ instance_info.imagen_instancia }}" alt="Instancia" class="w-full h-full object-contain cursor-pointer zoom" onclick="openModal(this.src)">
+                {% else %}
+                    <span class="text-gray-500">Aquí se mostrará la imagen</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Sección 3: Características de la instancia y solución -->
+        <div class="md:w-1/3 p-4 bg-gray-100 rounded-lg shadow-lg mb-6 md:mb-0 flex-shrink-0">
+            <h2 class="text-2xl font-sans font-bold mb-4 text-gray-800">Características de la Instancia</h2>
+            <!-- Contenedor para mostrar las características de la instancia CVRP -->
+            <div id="caracteristicas-instancia" class="mb-4">
+                {% if instance_info %}
+                    <div class="p-4 border rounded shadow bg-white">
+                        <div class="mb-4">
+                            <label class="block text-gray-800 font-mono text-xs mb-2">Modelo: <span class="text-pink-500">{{ instance_info.model_name }}</span></label>
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-gray-800 font-mono text-xs mb-2">Número de Clientes: <span class="text-pink-500">{{ instance_info.num_clientes }}</span></label>
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-gray-800 font-mono text-xs mb-2">Capacidad: <span class="text-pink-500">{{ instance_info.deposito.capacity }}</span></label>
+                        </div>
+                    </div>
+                {% else %}
+                    <span class="text-gray-500">Aquí se mostrarán las características de la instancia</span>
+                {% endif %}
+            </div>
+            <div id="imagen-solucion" class="w-full h-64 border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden">
+                {% if instance_info and instance_info.imagen_solucion %}
+                    <img src="{{ instance_info.imagen_solucion }}" alt="Solución" class="w-full h-full object-contain cursor-pointer zoom" onclick="openModal(this.src)">
+                {% else %}
+                    <span class="text-gray-500">Aquí se mostrará la solución</span>
+                {% endif %}
+            </div>
+            <!-- Botones debajo de la imagen de la solución -->
+            <div class="flex justify-around mt-4">
+                <button id="generar-imagen" class="w-1/3 p-3 text-sm bg-gray-500 text-white rounded hover:bg-gray-600">Generar Imagen</button>
+                <button id="generar-imagen-loading" type="button" class="w-1/3 p-3 text-sm bg-gray-500 text-white rounded hover:bg-gray-600 hidden" disabled>
+                    <svg class="animate-spin h-5 w-5 mr-3" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+                    </svg>
+                    <span>Procesando...</span>
+                </button>
+                <button id="automatizar" class="w-1/3 p-3 text-sm bg-gray-500 text-white rounded hover:bg-gray-600">Automatizar</button>
+                <button id="automatizar-loading" type="button" class="w-1/3 p-3 text-sm bg-gray-500 text-white rounded hover:bg-gray-600 hidden" disabled>
+                    <svg class="animate-spin h-5 w-5 mr-3" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+                    </svg>
+                    <span>Procesando...</span>
+                </button>
+            </div>
+            
+
+        </div>
+    </div>
+</div>
+
+
+
+<!-- Modal -->
+<div id="modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 hidden">
+    <div class="relative bg-white rounded-lg shadow-lg">
+        <!-- Botón de cierre del modal -->
+        <button class="absolute top-0 right-0 m-2 text-gray-600 hover:text-gray-900" onclick="closeModal()">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+        </button>
+        <img id="modal-image" src="" alt="Imagen" class="rounded-lg">
+    </div>
+</div>
+
+<!-- Script para manejar la lógica de agregar y eliminar instancias -->
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        initialize();
+        loadSelectedInstances();
+    
+        // Añadir eventos a los botones
+        document.getElementById('generar-imagen').addEventListener('click', enviarInstancias);
+        document.getElementById('automatizar').addEventListener('click', automatizar);
+    });
+    
+    function initialize() {
+        const agregarInstanciaBtn = document.getElementById('agregar-instancia');
+        agregarInstanciaBtn.addEventListener('click', agregarInstancia);
+    }
+    
+    function agregarInstancia(event) {
+        event.preventDefault();
+        const instanciaSelect = document.getElementById('instancia-select');
+        const listaInstancias = document.getElementById('lista-instancias');
+        const instanciaSeleccionada = instanciaSelect.value;
+    
+        if (instanciaSeleccionada) {
+            const listItem = document.createElement('div');
+            listItem.classList.add('bg-white', 'rounded', 'shadow', 'p-4', 'flex', 'justify-between', 'items-center', 'cursor-pointer');
+            listItem.innerHTML = `
+                <span>${instanciaSeleccionada}</span>
+                <button class="eliminar-instancia text-sm p-1 bg-red-500 text-white rounded">Eliminar</button>
+            `;
+            listaInstancias.appendChild(listItem);
+    
+            listItem.addEventListener('click', (event) => {
+                if (!event.target.classList.contains('eliminar-instancia')) {
+                    window.location.href = `/obtener_atributos_instancia?instancia=${instanciaSeleccionada}`;
+                }
+            });
+    
+            const eliminarBtn = listItem.querySelector('.eliminar-instancia');
+            eliminarBtn.addEventListener('click', () => {
+                listItem.remove();
+                saveSelectedInstances();
+            });
+    
+            saveSelectedInstances();
+        }
+    }
+    
+    function saveSelectedInstances() {
+        const listaInstancias = document.getElementById('lista-instancias');
+        const instancias = [];
+        listaInstancias.querySelectorAll('div').forEach(item => {
+            instancias.push(item.querySelector('span').textContent);
+        });
+        localStorage.setItem('instanciasSeleccionadas', JSON.stringify(instancias));
+    }
+    
+    function loadSelectedInstances() {
+        const instancias = JSON.parse(localStorage.getItem('instanciasSeleccionadas') || '[]');
+        const listaInstancias = document.getElementById('lista-instancias');
+    
+        instancias.forEach(instancia => {
+            const listItem = document.createElement('div');
+            listItem.classList.add('bg-white', 'rounded', 'shadow', 'p-4', 'flex', 'justify-between', 'items-center', 'cursor-pointer');
+            listItem.innerHTML = `
+                <span>${instancia}</span>
+                <button class="eliminar-instancia text-sm p-1 bg-red-500 text-white rounded">Eliminar</button>
+            `;
+            listaInstancias.appendChild(listItem);
+    
+            listItem.addEventListener('click', (event) => {
+                if (!event.target.classList.contains('eliminar-instancia')) {
+                    window.location.href = `/obtener_atributos_instancia?instancia=${instancia}`;
+                }
+            });
+    
+            const eliminarBtn = listItem.querySelector('.eliminar-instancia');
+            eliminarBtn.addEventListener('click', () => {
+                listItem.remove();
+                saveSelectedInstances();
+            });
+        });
+    }
+    
+    function enviarInstancias() {
+        // Extraer las instancias de localStorage
+        const instancias = JSON.parse(localStorage.getItem('instanciasSeleccionadas') || '[]');
+    
+        // Verificar que haya instancias seleccionadas
+        if (instancias.length > 0) {
+            toggleLoading('generar-imagen', 'generar-imagen-loading', true);
+    
+            // Enviar una solicitud POST al servidor con las instancias
+            fetch('/generate_images/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({ instancias: instancias })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Respuesta del servidor:', data);
+                // Almacenar el JSON en localStorage
+                localStorage.setItem('data', JSON.stringify(data));
+                alert('Imágenes generadas y JSON almacenado en localStorage.');
+            })
+            .catch(error => {
+                console.error('Error al enviar las instancias:', error);
+            })
+            .finally(() => {
+                toggleLoading('generar-imagen', 'generar-imagen-loading', false);
+            });
+        } else {
+            alert('No hay instancias seleccionadas.');
+        }
+    }
+    
+    function automatizar() {
+        // Extraer el JSON de localStorage
+        const data = JSON.parse(localStorage.getItem('data') || '{}');
+    
+        // Verificar que el JSON no esté vacío
+        if (Object.keys(data).length > 0) {
+            toggleLoading('automatizar', 'automatizar-loading', true);
+    
+            // Enviar una solicitud POST al servidor con los datos
+            fetch('/ejecutar_automatizacion/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Respuesta del servidor:', data);
+                alert('Automatización completada.');
+            })
+            .catch(error => {
+                console.error('Error al automatizar:', error);
+            })
+            .finally(() => {
+                toggleLoading('automatizar', 'automatizar-loading', false);
+            });
+        } else {
+            alert('No hay json para la automatizacion.');
+        }
+    }
+    
+    // Función para mostrar/ocultar el estado de carga
+    function toggleLoading(buttonId, loadingButtonId, isLoading) {
+        const button = document.getElementById(buttonId);
+        const loadingButton = document.getElementById(loadingButtonId);
+        if (isLoading) {
+            button.classList.add('hidden');
+            loadingButton.classList.remove('hidden');
+        } else {
+            button.classList.remove('hidden');
+            loadingButton.classList.add('hidden');
+        }
+    }
+    
+    // Función para abrir el modal
+    function openModal(src) {
+        const modal = document.getElementById('modal');
+        const modalImage = document.getElementById('modal-image');
+        modalImage.src = src;
+        modal.classList.remove('hidden');
+    }
+    
+    // Función para cerrar el modal
+    function closeModal() {
+        const modal = document.getElementById('modal');
+        modal.classList.add('hidden');
+    }
+    
+    // Función para obtener el token CSRF
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                // Does this cookie string begin with the name we want?
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    
+</script>
+
+
+<style>
+    .zoom {
+        transition: transform 0.5s ease; /* Aplica la transición en el estado normal */
+    }
+    .zoom:hover {
+        transform: scale(1.2);
+        z-index: 10;
+    }
+</style>
+
+{% endblock %}

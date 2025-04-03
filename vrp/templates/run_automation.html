@@ -1,0 +1,315 @@
+{% extends 'layout.html' %}
+{% load filters %}
+
+{% block content %}
+<div class="flex mx-5 bg-gray-800 text-white p-6 rounded">
+    <div class="mx-10 w-full flex-col">
+        <div class='flex flex-row h-lvh'>
+            <div class='w-1/3 h-full rounded-lg shadow-lg'>
+                <h1 class="text-lg font-bold font-sans mb-4">Automatización personalizada</h1>
+                <form method="post" class="bg-gray-200 p-6 rounded-lg shadow-lg mb-6" onsubmit="showLoading()">
+                    {% csrf_token %}
+                    
+                    <div id="parametros-container">
+                        <div class="parametros-set mb-6">
+                            <div class="mb-4">
+                                <label for="instancia" class="text-sm block text-gray-800 font-mono mb-2">Selecciona una instancia:</label>
+                                <select name="instancia" class="text-sm bg-gray-200 text-gray-800 font-sans p-2 rounded w-full border border-gray-600 focus:ring focus:ring-pink-500">
+                                    {% for categoria, archivos in instancias.items %}
+                                        {% if not categoria|endswith:'-sol' %}
+                                        <optgroup label="{{ categoria }}" class="text-sm font-sans my-2">
+                                            {% for archivo in archivos %}
+                                                {% if archivo|endswith:'.vrp' %}
+                                                    <option value="{{ archivo }}" {% if archivo == selected_instance %}selected{% endif %}>
+                                                        {{ archivo }}
+                                                    </option>
+                                                {% endif %}
+                                            {% endfor %}
+                                        </optgroup>
+                                        {% endif %}
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="mb-2">
+                                <label for="population_size" class="text-sm block text-gray-800 font-mono mb-2">Tamaño de la Población:</label>
+                                <input type="number" name="population_size" class="bg-gray-200 text-gray-800 font-sans p-2 rounded w-full border border-gray-600 focus:ring focus:ring-pink-500">
+                            </div>
+                            <div class="mb-2">
+                                <label for="num_generations" class="text-sm block text-gray-800 font-mono mb-2">Número de Generaciones:</label>
+                                <input type="number" name="num_generations" class="bg-gray-200 text-gray-800 font-sans p-2 rounded w-full border border-gray-600 focus:ring focus:ring-pink-500">
+                            </div>
+                            <div class="mb-2">
+                                <label for="mutation_rate" class="text-sm block text-gray-800 font-mono mb-2">Tasa de Mutación:</label>
+                                <input type="number" step="0.01" name="mutation_rate" class="bg-gray-200 text-gray-800 font-sans p-2 rounded w-full border border-gray-600 focus:ring focus:ring-pink-500">
+                            </div>
+                            <div class="mb-2 flex items-center">
+                                <input type="checkbox" name="use_elitism" value="true" class="mr-2">
+                                <label for="use_elitism" class="text-sm text-gray-800">Usar Elitismo</label>
+                            </div>                            
+                        </div>
+                    </div>
+
+                    <div class="flex justify-between">
+                        <button type="button" class="text-xs bg-green-600 hover:bg-green-400 text-white font-bold py-2 px-2 rounded shadow-lg transition duration-300 ease-in-out transform hover:-translate-y-1 hover:scale-105" onclick="agregarParametros()">Agregar Parámetros</button>
+                        <button id="submit-button" type="submit" class="text-xs bg-pink-600 hover:bg-pink-400 text-white font-bold py-2 px-2 rounded shadow-lg transition duration-300 ease-in-out transform hover:-translate-y-1 hover:scale-105">Ejecutar Automatización</button>
+                        <button id="loading-button" type="button" class="text-xs flex bg-indigo-500 text-white font-bold py-2 px-2 rounded shadow-lg transition duration-300 ease-in-out transform hover:-translate-y-1 hover:scale-105 hidden" disabled>
+                            <svg class="animate-spin h-5 w-5 mr-3" viewBox="0 0 24 24">
+                                <circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="4" fill="none" />                    
+                            </svg>
+                            <span> Procesando...</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+            <div class='w-2/3 h-lvh mx-7'>
+                <div id="resultado-container" class='w-full h-full border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden'>
+                    <h2 class="text-sm font-sans font-bold mb-5">Resultados</h2>
+                </div>
+            </div>
+        </div>
+
+        <h2 class="text-sm font-sans font-bold mb-5">Tabla de Iteraciones</h2>
+        <table class="table-auto w-full bg-gray-700 text-white rounded-lg shadow-lg mb-6">
+            <thead>
+                <tr class="bg-gray-900">
+                    <th class="p-3 text-xs font-sans text-left">Nombre de la Instancia VRP</th>
+                    <th class="p-3 text-xs font-sans text-left">Cost_i1</th>
+                    <th class="p-3 text-xs font-sans text-left">Cost_i2</th>
+                    <th class="p-3 text-xs font-sans text-left">Cost_i3</th>
+                    <th class="p-3 text-xs font-sans text-left">Cost_i4</th>
+                    <th class="p-3 text-xs font-sans text-left">Cost_i5</th>
+                    <th class="p-3 text-xs font-sans text-left">Cost_i6</th>
+                    <th class="p-3 text-xs font-sans text-left">Best Cost</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for iteration in table_iterations %}
+                <tr class="border-t border-gray-600 cursor-pointer" onclick="showResults('{{ iteration.id }}')">
+                    <td class="p-3 text-sm">{{ iteration.instance.name_model.name_model }}</td>
+                    <td class="p-3 text-sm">{{ iteration.cost_i1 }}</td>
+                    <td class="p-3 text-sm">{{ iteration.cost_i2 }}</td>
+                    <td class="p-3 text-sm">{{ iteration.cost_i3 }}</td>
+                    <td class="p-3 text-sm">{{ iteration.cost_i4 }}</td>
+                    <td class="p-3 text-sm">{{ iteration.cost_i5 }}</td>
+                    <td class="p-3 text-sm">{{ iteration.cost_i6 }}</td>
+                    <td class="p-3 text-sm">{{ iteration.best_cost }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <h2 class="text-sm font-sans font-bold mb-5">Tabla Benchmark</h2>
+        <table class="table-auto w-full bg-gray-700 text-white rounded-lg shadow-lg">
+            <thead>
+                <tr class="bg-gray-900">
+                    <th class="p-3 text-xs font-sans text-left">Nombre de la Instancia VRP</th>
+                    <th class="p-3 text-xs font-sans text-left">N Nodos</th>
+                    <th class="p-3 text-xs font-sans text-left">Demand</th>
+                    <th class="p-3 text-xs font-sans text-left">Best Routes</th>
+                    <th class="p-3 text-xs font-sans text-left">Best Individual</th>
+                    <th class="p-3 text-xs font-sans text-left">Best K</th>
+                    <th class="p-3 text-xs font-sans text-left">Best Cost</th>                    
+                    <th class="p-3 text-xs font-sans text-left">Cost Sol</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for benchmark in table_benchmarks %}
+                <tr class="border-t border-gray-600">
+                    <td class="p-3 text-sm">{{ benchmark.instance.name_model.name_model }}</td>
+                    <td class="p-3 text-sm">{{ benchmark.n_nodos }}</td>
+                    <td class="p-3 text-sm">{{ benchmark.demand }}</td>
+                    <td class="p-3 text-sm">{{ benchmark.best_routes }}</td>
+                    <td class="p-3 text-sm">{{ benchmark.best_individual }}</td>
+                    <td class="p-3 text-sm">{{ benchmark.best_k }}</td>
+                    <td class="p-3 text-sm">{{ benchmark.best_cost }}</td>                    
+                    <td class="p-3 text-sm">{{ benchmark.cost_solution }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+function agregarParametros() {
+    const container = document.getElementById('parametros-container');
+    const parametrosSet = document.createElement('div');
+    parametrosSet.className = 'parametros-set mb-6';
+
+    parametrosSet.innerHTML = `
+        <div class="mb-4">
+            <label for="instancia" class="block text-gray-800 font-mono mb-2">Selecciona una instancia:</label>
+            <select name="instancia" class="bg-gray-200 text-gray-800 font-sans p-3 rounded w-full border border-gray-600 focus:ring focus:ring-pink-500">
+                {% for categoria, archivos in instancias.items %}
+                    <optgroup label="{{ categoria }}" class="font-sans my-2">
+                        {% for archivo in archivos %}
+                            <option value="{{ archivo }}">{{ archivo }}</option>
+                        {% endfor %}
+                    </optgroup>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="mb-4">
+            <label for="population_size" class="block text-gray-800 font-mono mb-2">Tamaño de la Población:</label>
+            <input type="number" name="population_size" class="bg-gray-200 text-gray-800 font-sans p-3 rounded w-full border border-gray-600 focus:ring focus:ring-pink-500">
+        </div>
+        <div class="mb-4">
+            <label for="num_generations" class="block text-gray-800 font-mono mb-2">Número de Generaciones:</label>
+            <input type="number" name="num_generations" class="bg-gray-200 text-gray-800 font-sans p-3 rounded w-full border border-gray-600 focus:ring focus:ring-pink-500">
+        </div>
+        <div class="mb-4">
+            <label for="mutation_rate" class="block text-gray-800 font-mono mb-2">Tasa de Mutación:</label>
+            <input type="number" step="0.01" name="mutation_rate" class="bg-gray-200 text-gray-800 font-sans p-3 rounded w-full border border-gray-600 focus:ring focus:ring-pink-500">
+        </div>
+        <div class="mb-4 flex items-center">
+            <input type="checkbox" name="use_elitism" value="true" class="mr-2">
+            <label for="use_elitism" class="text-gray-800">Usar Elitismo</label>
+        </div>
+    `;
+
+    container.appendChild(parametrosSet);
+}
+
+function showLoading() {
+    document.getElementById('submit-button').classList.add('hidden');
+    document.getElementById('loading-button').classList.remove('hidden');
+}
+
+// Función para mostrar los resultados
+function showResults(iterationId) {
+    fetch(`/get-solution-details/${iterationId}/`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.error) {
+                alert(data.error);
+            } else {
+                const resultadoContainer = document.getElementById('resultado-container');
+                const uniqueParam = new Date().getTime();
+                let currentSolution = 'obtained';
+
+                const toggleSolution = () => {
+                    const solutionImage = document.getElementById('solutionImage');
+                    const solutionIndicator = document.getElementById('solutionIndicator');
+                    const modalImage = document.getElementById('modalImage'); // Referencia al modal
+                    if (currentSolution === 'obtained') {
+                        const bestSolutionPath = `/static/${data.best_solution_graph_path}?t=${uniqueParam}`;
+                        solutionImage.src = bestSolutionPath;
+                        modalImage.src = bestSolutionPath; // Actualizar la imagen del modal
+                        solutionIndicator.textContent = `Resultado: ${data.best_cost}`;
+                        currentSolution = 'best';
+                    } else {
+                        const obtainedSolutionPath = `/static/${data.obtained_solution_graph_path}?t=${uniqueParam}`;
+                        solutionImage.src = obtainedSolutionPath;
+                        modalImage.src = obtainedSolutionPath; // Actualizar la imagen del modal
+                        solutionIndicator.textContent = `Solución: ${data.solucion_real}`;
+                        currentSolution = 'obtained';
+                    }
+                };
+
+                resultadoContainer.innerHTML = `
+                <div class="mx-5 p-6 bg-white rounded-lg shadow-lg transform transition-transform duration-500 hover:scale-105">
+                    <!-- Cabecera -->
+                    <div class="border border-gray-300 rounded-lg p-4 mb-6" style="border-spacing: 0.5rem;">
+                        <h3 class="text-sm font-sans font-bold text-gray-800 mb-2">Modelo : ${data.model_name}</h3>
+                        <table class="w-full text-center text-xs border-collapse">
+                            <thead>
+                                <tr class="bg-blue-500">
+                                    <th class="py-2 px-2 font-mono font-bold text-white border border-blue-600">Cost i1</th>
+                                    <th class="py-2 px-2 font-mono font-bold text-white border border-blue-600">Cost i2</th>
+                                    <th class="py-2 px-2 font-mono font-bold text-white border border-blue-600">Cost i3</th>
+                                    <th class="py-2 px-2 font-mono font-bold text-white border border-blue-600">Cost i4</th>
+                                    <th class="py-2 px-2 font-mono font-bold text-white border border-blue-600">Cost i5</th>
+                                    <th class="py-2 px-2 font-mono font-bold text-white border border-blue-600">Cost i6</th>
+                                    <th class="py-2 px-2 font-mono font-bold text-white border border-blue-600">Best Cost</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr class="hover:bg-blue-100 transition-colors duration-300">
+                                    <td class="py-2 px-4 text-gray-800 border border-blue-300">${data.cost_i1}</td>
+                                    <td class="py-2 px-4 text-gray-800 border border-blue-300">${data.cost_i2}</td>
+                                    <td class="py-2 px-4 text-gray-800 border border-blue-300">${data.cost_i3}</td>
+                                    <td class="py-2 px-4 text-gray-800 border border-blue-300">${data.cost_i4}</td>
+                                    <td class="py-2 px-4 text-gray-800 border border-blue-300">${data.cost_i5}</td>
+                                    <td class="py-2 px-4 text-gray-800 border border-blue-300">${data.cost_i6}</td>
+                                    <td class="py-2 px-4 text-gray-800 border border-blue-300">${data.best_cost}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Sección Principal -->
+                    <div class="grid grid-cols-4 gap-6">
+                        <!-- Parámetros -->
+                        <div class="col-span-1">
+                            <div class="border border-gray-300 rounded-lg p-4 bg-blue-50">
+                                <h4 class="text-sm font-sans font-bold text-gray-800 mb-4">Parámetros</h4>
+                                <ul class="text-xs text-gray-700 space-y-1">
+                                    <li><strong class='text-xs font-mono'>Population:</strong> ${data.parameters.population_size}</li>
+                                    <li><strong class='text-xs font-mono'>Generations:</strong> ${data.parameters.num_generations}</li>
+                                    <li><strong class='text-xs font-mono'>Rate:</strong> ${data.parameters.mutation_rate}</li>
+                                    <li><strong class='text-xs font-mono'>Elitism:</strong> ${data.parameters.use_elitism}</li>
+                                </ul>
+                            </div>
+                            <div id="solutionIndicator" class="text-xs font-sans mt-4 p-2 text-center bg-blue-200 text-blue-700 rounded-lg">Solución : ${data.solucion_real}</div>
+                            <button onclick="toggleSolution()" class="text-xs font-sans mt-4 w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 transition">Change</button>
+                        </div>
+                        
+                        <!-- Imagen -->
+                        <div class="col-span-3 flex items-center justify-center overflow-hidden border border-blue-400">
+                            <img id="solutionImage" src="/static/${data.obtained_solution_graph_path}?t=${uniqueParam}" alt="Gráfico de la Solución" class="w-full h-auto object-contain rounded-lg transform transition-transform duration-500 hover:scale-125 hover:border-blue-500 cursor-pointer" onclick="openModal(this.src)">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Modal -->
+                <div id="imageModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 hidden">
+                    <div class="relative bg-white rounded-lg shadow-lg">
+                        <button class="absolute top-0 right-0 m-2 text-gray-600 hover:text-gray-900" onclick="closeModal()">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                        <img id="modalImage" src="" alt="Imagen Ampliada" class="rounded-lg">
+                    </div>
+                </div>
+            `;
+
+                // Agregar funciones de modal
+                const openModal = (src) => {
+                    const modal = document.getElementById('imageModal');
+                    const modalImage = document.getElementById('modalImage');
+                    modalImage.src = src;
+                    modal.classList.remove('hidden');
+                };
+
+                const closeModal = () => {
+                    const modal = document.getElementById('imageModal');
+                    modal.classList.add('hidden');
+                };
+
+                // Asignar funciones al ámbito global para que sean accesibles desde el HTML
+                window.openModal = openModal;
+                window.closeModal = closeModal;
+                window.toggleSolution = toggleSolution; // Asignar la función toggleSolution al ámbito global
+            }
+        })
+        .catch(error => console.error('Error al obtener los detalles de la solución:', error));
+}
+
+
+</script>
+<style>
+    .zoom {
+        transition: transform 0.5s ease; /* Aplica la transición en el estado normal */
+    }
+    .zoom:hover {
+        transform: scale(1.35);
+        z-index: 10;
+    }
+</style>
+{% endblock %}
