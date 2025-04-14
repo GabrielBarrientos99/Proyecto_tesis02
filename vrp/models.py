@@ -3,16 +3,17 @@ from django.db import models
 # Create your models here.
 
 class benchmark(models.Model):
-    name_model = models.CharField(max_length=100,default='None')
+    name_model = models.CharField(max_length=100,default='None',unique=True)
     num_customers = models.IntegerField()
     num_vehicles = models.IntegerField()
     capacity = models.IntegerField()
+    cost_solution = models.FloatField(null=True, blank=True)  # 👈 Aquí el nuevo campo
 
 class VRPInstance(models.Model):
     name_model = models.ForeignKey(benchmark, on_delete=models.CASCADE)
-    population_size = models.IntegerField()
-    num_generations = models.IntegerField()
-    mutation_rate = models.FloatField(default=0.01)
+    population_size = models.IntegerField(null=True, blank=True)
+    num_generations = models.IntegerField(null=True, blank=True)
+    mutation_rate = models.FloatField(null=True, blank=True)
     use_elitism = models.BooleanField(default=True)
 
 class Table_iterations(models.Model):

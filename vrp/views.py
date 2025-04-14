@@ -396,6 +396,11 @@ def experimentos(request):
     historial = ConfiguracionExperimento.objects.select_related('estrategia', 'instancia__name_model') \
         .order_by('-timestamp')[:10]
     
+    resumenes = {
+        config.id: ResumenExperimento.objects.filter(configuracion=config).first()
+        for config in historial
+    }
+    
     instancias_filtradas = {
         categoria: archivos
         for categoria, archivos in instancias.items()
@@ -404,7 +409,8 @@ def experimentos(request):
 
     return render(request, 'experimentos.html', {
         'instancias': instancias_filtradas,
-        'historial': historial
+        'historial': historial,
+        'resumenes': resumenes,
     })
 
 
@@ -432,9 +438,35 @@ def ejecutar_experimento_ag(request):
             cvrp = CVRP(file_path=file_path)
 
             # Crear configuración de experimento
-            estrategia, _ = EstrategiaExperimento.objects.get_or_create(nombre="AG-AUTO", algoritmo="AG")
+            nombre_estrategia = request.POST.get('nombre_estrategia', 'AG-AUTO').strip()
+
+            sol_path = file_path.replace('.vrp', '.sol')
+            if os.path.exists(sol_path):
+                costo_solucion = cvrp.get_solution(sol_path)
+            else:
+                costo_solucion = None
+
+            estrategia, _ = EstrategiaExperimento.objects.get_or_create(
+                nombre=nombre_estrategia,
+                algoritmo="AG"
+            )
+
+            nombre_instancia = os.path.splitext(os.path.basename(instancia))[0]
+
+            # Obtener o crear el benchmark
+            benchmark_obj, _ = benchmark.objects.get_or_create(
+                name_model=nombre_instancia,
+                defaults={
+                    'num_customers': cvrp.num_clientes,
+                    'num_vehicles': cvrp.deposito.k,
+                    'capacity': cvrp.deposito.Q,
+                    'cost_solution': costo_solucion
+                }
+            )
+
+
             vrp_instance = VRPInstance.objects.create(
-                name_model=benchmark.objects.first(),
+                name_model=benchmark_obj,
                 population_size=population_size,
                 num_generations=num_generations,
                 mutation_rate=mutation_rate,
@@ -454,6 +486,7 @@ def ejecutar_experimento_ag(request):
 
             costos = []
             tiempos = []
+            gaps = []
 
             for rep in range(num_repeticiones):
                 start = time.time()
@@ -472,21 +505,27 @@ def ejecutar_experimento_ag(request):
                 best_ind, best_cost, rutas = ga.evolve()
                 tiempo = time.time() - start
 
+                gap = None
+                if cvrp.deposito.Q and benchmark_obj.cost_solution:
+                    gap = ((best_cost - benchmark_obj.cost_solution) / benchmark_obj.cost_solution) * 100
+
                 ResultadoRepeticion.objects.create(
                     configuracion=config,
                     iteracion=rep+1,
                     costo_obtenido=best_cost,
                     tiempo_ejecucion=tiempo,
                     mejor_ruta=rutas,
+                    gap_porcentual=gap
                 )
                 costos.append(best_cost)
                 tiempos.append(tiempo)
+                gaps.append(gap)
 
             ResumenExperimento.objects.create(
                 configuracion=config,
                 promedio_costo=mean(costos),
                 tiempo_total=sum(tiempos),
-                promedio_gap=0,  # Completar si se tiene óptimo
+                promedio_gap=mean(gaps),  # Completar si se tiene óptimo
                 mejor_resultado=min(costos),
                 desviacion_estandar=stdev(costos) if len(costos) > 1 else 0,
             )
@@ -497,7 +536,7 @@ def ejecutar_experimento_ag(request):
                 'resumen': ResumenExperimento.objects.get(configuracion=config),
             })
 
-            return JsonResponse({'status': 'Experimento completado', 'html': html})
+            return JsonResponse({'status': 'Experimento ACO completado', 'html': html})
 
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=500)
@@ -528,10 +567,27 @@ def ejecutar_experimento_aco(request):
             if not os.path.exists(file_path):
                 return JsonResponse({'error': 'Archivo de instancia no encontrado'}, status=404)
 
+            nombre_instancia = os.path.splitext(os.path.basename(instancia))[0]
             cvrp = CVRP(file_path=file_path)
+            sol_path = file_path.replace('.vrp', '.sol')
+            if os.path.exists(sol_path):
+                costo_solucion = cvrp.get_solution(sol_path)
+            else:
+                costo_solucion = None
+
+            benchmark_obj, _ = benchmark.objects.get_or_create(
+                name_model=nombre_instancia,
+                defaults={
+                    'num_customers': cvrp.num_clientes,
+                    'num_vehicles': cvrp.deposito.k,
+                    'capacity': cvrp.deposito.Q,
+                    'cost_solution': costo_solucion
+                }
+            )
+            
             estrategia, _ = EstrategiaExperimento.objects.get_or_create(nombre="ACO-AUTO", algoritmo="ACO")
             vrp_instance = VRPInstance.objects.create(
-                name_model=benchmark.objects.first()
+                name_model=benchmark_obj
             )
             config = ConfiguracionExperimento.objects.create(
                 estrategia=estrategia,
@@ -548,7 +604,7 @@ def ejecutar_experimento_aco(request):
                 ajuste_dinamico=ajuste_dinamico,
             )
 
-            costos, tiempos = [], []
+            costos, tiempos, gaps = [], [],[]
             for i in range(num_repeticiones):
                 start = time.time()
                 aco = AntColonyOptimizer_v2(
@@ -565,7 +621,14 @@ def ejecutar_experimento_aco(request):
                     ajuste_dinamico=ajuste_dinamico,
                 )
                 best_routes, best_cost = aco.train()
+                # Asegura que todas las rutas tengan ints nativos
+                best_routes = [[int(nodo) for nodo in ruta] for ruta in best_routes]
+                best_cost = float(best_cost)
                 tiempo = time.time() - start
+
+                gap = None
+                if cvrp.deposito.Q and benchmark_obj.cost_solution:
+                    gap = ((best_cost - benchmark_obj.cost_solution) / benchmark_obj.cost_solution) * 100
 
                 ResultadoRepeticion.objects.create(
                     configuracion=config,
@@ -573,20 +636,29 @@ def ejecutar_experimento_aco(request):
                     costo_obtenido=best_cost,
                     tiempo_ejecucion=tiempo,
                     mejor_ruta=best_routes,
+                    gap_porcentual=gap
                 )
                 costos.append(best_cost)
                 tiempos.append(tiempo)
+                gaps.append(gap)
 
             ResumenExperimento.objects.create(
                 configuracion=config,
                 promedio_costo=mean(costos),
                 tiempo_total=sum(tiempos),
-                promedio_gap=0,
+                promedio_gap=mean(gaps) if gaps else 0,
                 mejor_resultado=min(costos),
                 desviacion_estandar=stdev(costos) if len(costos) > 1 else 0,
             )
 
-            return JsonResponse({'status': 'Experimento ACO completado', 'configuracion_id': config.id})
+            html = render_to_string('partials/resultados_tabla.html', {
+                    'resultados': ResultadoRepeticion.objects.select_related(
+                        'configuracion__instancia__name_model',
+                        'configuracion__estrategia'
+                    ).filter(configuracion=config),
+                    'resumen': ResumenExperimento.objects.get(configuracion=config),
+                })
+            return JsonResponse({'status': 'Experimento ACO completado', 'html': html})
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=500)
     else:
@@ -597,6 +669,7 @@ def ejecutar_experimento_hibrido(request):
     if request.method == 'POST':
         try:
             # === Parámetros de ACO ===
+            nombre_estrategia = request.POST.get('nombre_estrategia', 'HIBRIDO-AUTO').strip()
             instancia = request.POST['instancia']
             num_ants = int(request.POST['aco_num_ants'])
             max_iter = int(request.POST['aco_iter'])
@@ -644,9 +717,28 @@ def ejecutar_experimento_hibrido(request):
             _, _, poblacion_aco = aco.train()
 
             # === Crear configuración del experimento ===
-            estrategia, _ = EstrategiaExperimento.objects.get_or_create(nombre="HIBRIDO-ACO2AG", algoritmo="HIBRIDO")
+            estrategia, _ = EstrategiaExperimento.objects.get_or_create(nombre=nombre_estrategia, algoritmo="HIBRIDO")
+
+            nombre_instancia = os.path.splitext(instancia)[0]
+            
+            sol_path = file_path.replace('.vrp', '.sol')
+            if os.path.exists(sol_path):
+                costo_solucion = cvrp.get_solution(sol_path)
+            else:
+                costo_solucion = None
+
+            benchmark_obj, _ = benchmark.objects.get_or_create(
+                name_model=nombre_instancia,
+                defaults={
+                    'num_customers': cvrp.num_clientes,
+                    'num_vehicles': cvrp.deposito.k,
+                    'capacity': cvrp.deposito.Q,
+                    'cost_solution': costo_solucion
+                }
+            )
+
             vrp_instance = VRPInstance.objects.create(
-                name_model=benchmark.objects.first(),
+                name_model=benchmark_obj,
                 population_size=population_size,
                 num_generations=num_generations,
                 mutation_rate=mutation_rate,
@@ -675,7 +767,7 @@ def ejecutar_experimento_hibrido(request):
             )
 
             # === Ejecutar AG con población inicial de ACO ===
-            costos, tiempos = [], []
+            costos, tiempos, gaps = [], [], []
 
             for rep in range(num_repeticiones):
                 start = time.time()
@@ -694,26 +786,40 @@ def ejecutar_experimento_hibrido(request):
                 best_ind, best_cost, rutas = ga.evolve()
                 tiempo = time.time() - start
 
+                gap = None
+                if cvrp.deposito.Q and benchmark_obj.cost_solution:
+                    gap = ((best_cost - benchmark_obj.cost_solution) / benchmark_obj.cost_solution) * 100
+
                 ResultadoRepeticion.objects.create(
                     configuracion=config,
                     iteracion=rep+1,
                     costo_obtenido=best_cost,
                     tiempo_ejecucion=tiempo,
                     mejor_ruta=rutas,
+                    gap_porcentual=gap
                 )
                 costos.append(best_cost)
                 tiempos.append(tiempo)
+                gaps.append(gap)
 
             ResumenExperimento.objects.create(
                 configuracion=config,
                 promedio_costo=mean(costos),
                 tiempo_total=sum(tiempos),
-                promedio_gap=0,
+                promedio_gap=mean(gaps) if gaps else 0,
                 mejor_resultado=min(costos),
                 desviacion_estandar=stdev(costos) if len(costos) > 1 else 0,
             )
 
-            return JsonResponse({'status': 'Experimento híbrido completado', 'configuracion_id': config.id})
+            html = render_to_string('partials/resultados_tabla.html', {
+            'resultados': ResultadoRepeticion.objects.select_related(
+                    'configuracion__instancia__name_model',
+                    'configuracion__estrategia'
+                ).filter(configuracion=config),
+                'resumen': ResumenExperimento.objects.get(configuracion=config),
+            })
+
+            return JsonResponse({'status': 'Experimento híbrido completado', 'html': html})
 
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=500)

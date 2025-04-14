@@ -6,6 +6,7 @@
         <th class="p-2">Estrategia</th>
         <th class="p-2">Instancia</th>
         <th class="p-2">Costo</th>
+        <th class="p-2">Gap (%)</th> <!-- Nuevo -->
         <th class="p-2">Tiempo (s)</th>
         <th class="p-2">Acciones</th>
       </tr>
@@ -17,7 +18,14 @@
         <td class="p-2">{{ r.configuracion.estrategia.nombre }}</td>
         <td class="p-2">{{ r.configuracion.instancia.name_model.name_model }}</td>
         <td class="p-2">{{ r.costo_obtenido|floatformat:2 }}</td>
-        <td class="p-2">{{ r.tiempo_ejecucion|floatformat:2 }}</td>
+        <td class="p-2">
+          {% if r.gap_porcentual is not None %}
+            {{ r.gap_porcentual|floatformat:2 }}%
+          {% else %}
+            -
+          {% endif %}
+        </td>
+        <td class="p-2">{{ r.tiempo_ejecucion|floatformat:3 }}</td>
         <td class="p-2">
           <button onclick="toggleParametros('{{ r.id }}')" class="text-xs bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-1 px-2 rounded">Ver detalles</button>
         </td>
@@ -54,7 +62,13 @@
     <p><strong>Promedio Costo:</strong> {{ resumen.promedio_costo|floatformat:2 }}</p>
     <p><strong>Mejor Resultado:</strong> {{ resumen.mejor_resultado|floatformat:2 }}</p>
     <p><strong>Desviación Estándar:</strong> {{ resumen.desviacion_estandar|floatformat:2 }}</p>
+    <p><strong>Promedio Gap:</strong> {{ resumen.promedio_gap|floatformat:2 }}%</p> <!-- Nuevo -->
     <p><strong>Tiempo Total:</strong> {{ resumen.tiempo_total|floatformat:2 }} segundos</p>
+
+    <!-- Solo mostrar si está disponible -->
+    {% if resultados and resultados.0.configuracion.instancia.name_model.cost_solution %}
+    <p><strong>Costo solución óptima:</strong> {{ resultados.0.configuracion.instancia.name_model.cost_solution|floatformat:2 }}</p>
+    {% endif %}
   </div>
   
   
