@@ -1,0 +1,60 @@
+<!-- Tabla Resumen Principal -->
+<table class="w-full table-auto text-sm text-left bg-white shadow rounded-lg mb-6">
+    <thead class="bg-gray-400">
+      <tr>
+        <th class="p-2">#</th>
+        <th class="p-2">Estrategia</th>
+        <th class="p-2">Instancia</th>
+        <th class="p-2">Costo</th>
+        <th class="p-2">Tiempo (s)</th>
+        <th class="p-2">Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in resultados %}
+      <tr class="border-t hover:bg-gray-500 hover:text-white text-gray-500">
+        <td class="p-2">{{ r.iteracion }}</td>
+        <td class="p-2">{{ r.configuracion.estrategia.nombre }}</td>
+        <td class="p-2">{{ r.configuracion.instancia.name_model.name_model }}</td>
+        <td class="p-2">{{ r.costo_obtenido|floatformat:2 }}</td>
+        <td class="p-2">{{ r.tiempo_ejecucion|floatformat:2 }}</td>
+        <td class="p-2">
+          <button onclick="toggleParametros('{{ r.id }}')" class="text-xs bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-1 px-2 rounded">Ver detalles</button>
+        </td>
+      </tr>
+      <tr id="parametros-{{ r.id }}" class="hidden bg-gray-50">
+        <td colspan="6" class="p-4">
+          <div class="grid grid-cols-2 gap-4 text-xs text-gray-800">
+            <div>
+              <h4 class="font-bold mb-2">Parámetros AG</h4>
+              <ul class="space-y-1">
+                <li><strong>Población:</strong> {{ r.configuracion.population_size }}</li>
+                <li><strong>Generaciones:</strong> {{ r.configuracion.num_generations }}</li>
+                <li><strong>Mutación:</strong> {{ r.configuracion.mutation_rate }}</li>
+                <li><strong>Elitismo:</strong> {{ r.configuracion.use_elitism }}</li>
+                <li><strong>Mutación Tipo:</strong> {{ r.configuracion.tipo_mutacion }}</li>
+                <li><strong>Estrategia 2-opt:</strong> {{ r.configuracion.estrategia_2opt }}</li>
+                <li><strong>Frecuencia 2-opt:</strong> {{ r.configuracion.freq_2opt }}</li>
+              </ul>
+            </div>
+            <div>
+              <h4 class="font-bold mb-2">Rutas</h4>
+              <pre class="text-xs bg-gray-200 p-2 rounded overflow-x-auto">{{ r.mejor_ruta|safe }}</pre>
+            </div>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  
+  <!-- Tarjeta de resumen -->
+  <div class="bg-blue-50 p-4 rounded shadow text-sm text-gray-800">
+    <h3 class="font-bold text-blue-600 mb-2">Resumen del Experimento</h3>
+    <p><strong>Promedio Costo:</strong> {{ resumen.promedio_costo|floatformat:2 }}</p>
+    <p><strong>Mejor Resultado:</strong> {{ resumen.mejor_resultado|floatformat:2 }}</p>
+    <p><strong>Desviación Estándar:</strong> {{ resumen.desviacion_estandar|floatformat:2 }}</p>
+    <p><strong>Tiempo Total:</strong> {{ resumen.tiempo_total|floatformat:2 }} segundos</p>
+  </div>
+  
+  

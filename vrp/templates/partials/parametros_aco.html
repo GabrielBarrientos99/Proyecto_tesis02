@@ -1,0 +1,31 @@
+<form id="form-aco" class="space-y-4">
+    <div>
+      <label class="block text-sm text-gray-700 font-bold">Número de Hormigas</label>
+      <input type="number" name="num_ants" class="w-full p-2 border border-gray-300 rounded">
+    </div>
+    <div>
+      <label class="block text-sm text-gray-700 font-bold">Iteraciones</label>
+      <input type="number" name="max_iter" class="w-full p-2 border border-gray-300 rounded">
+    </div>
+    <div>
+      <label class="block text-sm text-gray-700 font-bold">Alpha</label>
+      <input type="number" step="0.1" name="alpha" class="w-full p-2 border border-gray-300 rounded">
+    </div>
+    <div>
+      <label class="block text-sm text-gray-700 font-bold">Beta</label>
+      <input type="number" step="0.1" name="beta" class="w-full p-2 border border-gray-300 rounded">
+    </div>
+    <div>
+      <label class="block text-sm text-gray-700 font-bold">Tasa de Evaporación</label>
+      <input type="number" step="0.01" name="evaporation_rate" class="w-full p-2 border border-gray-300 rounded">
+    </div>
+    <div class="flex items-center space-x-2">
+      <input type="checkbox" name="reinicio" id="reinicio">
+      <label for="reinicio" class="text-sm text-gray-700">Reinicio adaptativo</label>
+    </div>
+    <div class="flex items-center space-x-2">
+      <input type="checkbox" name="opt2" id="opt2">
+      <label for="opt2" class="text-sm text-gray-700">Usar 2-opt</label>
+    </div>
+  </form>
+  

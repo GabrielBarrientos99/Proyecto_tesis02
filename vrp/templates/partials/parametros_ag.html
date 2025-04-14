@@ -1,0 +1,66 @@
+<form id="form-ag" class="space-y-4">
+  {% csrf_token %}
+  <div>
+    <label class="block text-sm font-bold text-gray-700">Instancia</label>
+    <select name="instancia" class="w-full p-2 border rounded">
+      {% for categoria, archivos in instancias.items %}
+        <optgroup label="{{ categoria }}">
+          {% for archivo in archivos %}
+            <option value="{{ archivo }}">{{ archivo }}</option>
+          {% endfor %}
+        </optgroup>
+      {% endfor %}
+    </select>
+  </div>
+  <div>
+    <label class="block text-sm font-bold text-gray-700">Población</label>
+    <input type="number" name="population_size" class="w-full p-2 border rounded">
+  </div>
+  <div>
+    <label class="block text-sm font-bold text-gray-700">Generaciones</label>
+    <input type="number" name="num_generations" class="w-full p-2 border rounded">
+  </div>
+  <div>
+    <label class="block text-sm font-bold text-gray-700">Tasa de Mutación</label>
+    <input type="number" step="0.01" name="mutation_rate" class="w-full p-2 border rounded">
+  </div>
+  <div class="flex items-center space-x-2">
+    <input type="checkbox" name="use_elitism" id="elitism">
+    <label for="elitism" class="text-sm text-gray-700">Elitismo</label>
+  </div>
+  <div class="flex items-center space-x-2">
+    <input type="checkbox" name="gready" id="gready">
+    <label for="gready" class="text-sm text-gray-700">Población Greedy</label>
+  </div>
+  <div class="flex items-center space-x-2">
+    <input type="checkbox" name="homogenia" id="homogenia">
+    <label for="homogenia" class="text-sm text-gray-700">Homogeneidad</label>
+  </div>
+
+  <!-- NUEVOS CAMPOS -->
+  <div>
+    <label class="block text-sm font-bold text-gray-700">Tipo de mutación</label>
+    <select name="tipo_mutacion" class="w-full p-2 border rounded">
+      <option value="inversion">Inversión</option>
+      <option value="swap_sequence">Intercambio de secuencias</option>
+    </select>
+  </div>
+  <div>
+    <label class="block text-sm font-bold text-gray-700">Estrategia 2-opt</label>
+    <select name="estrategia_2opt" class="w-full p-2 border rounded">
+      <option value="NO_2OPT">No aplicar</option>
+      <option value="EACH_GEN">Cada hijo</option>
+      <option value="GEN_X">Cada N generaciones</option>
+      <option value="TOP_GEN">Top de la generación</option>
+      <option value="FINAL">Solo al final</option>
+    </select>
+  </div>
+  <div>
+    <label class="block text-sm font-bold text-gray-700">Frecuencia 2-opt (si aplica)</label>
+    <input type="number" name="freq_2opt" class="w-full p-2 border rounded" value="10">
+  </div>
+  <div>
+    <label class="block text-sm font-bold text-gray-700">Número de repeticiones</label>
+    <input type="number" name="num_repeticiones" value="1" class="w-full p-2 border rounded">
+  </div>
+</form>

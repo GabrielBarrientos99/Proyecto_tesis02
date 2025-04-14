@@ -1,0 +1,123 @@
+{% extends 'layout.html' %}
+{% load static %}
+{% block title %}Experimentación ACO & AG{% endblock %}
+
+{% block content %}
+<div class="bg-gray-800 p-6 rounded-lg shadow-lg">
+  <h1 class="text-xl text-white font-bold mb-6">Plataforma de Experimentación Personalizada</h1>
+
+  <!-- Sección de Tabs -->
+  <div class="flex space-x-4 mb-6">
+    <button onclick="switchTab('ag')" class="bg-pink-500 hover:bg-pink-400 text-white font-bold py-2 px-4 rounded">Genético</button>
+    <button onclick="switchTab('aco')" class="bg-blue-600 hover:bg-blue-400 text-white font-bold py-2 px-4 rounded">ACO</button>
+    <button onclick="switchTab('hibrido')" class="bg-green-600 hover:bg-green-400 text-white font-bold py-2 px-4 rounded">Híbrido</button>
+  </div>
+
+  <!-- Paneles de configuración -->
+  <div id="config-ag" class="bg-white p-6 rounded-lg shadow mb-6 text-gray-800">
+    <h2 class="text-lg font-bold mb-4 text-pink-600">Configuración - Algoritmo Genético</h2>
+    {% include 'partials/parametros_ag.html' %}
+  </div>
+
+  <div id="config-aco" class="bg-white p-6 rounded-lg shadow mb-6 hidden text-gray-800">
+    <h2 class="text-lg font-bold mb-4 text-blue-600">Configuración - ACO</h2>
+    {% include 'partials/parametros_aco.html' %}
+  </div>
+
+  <div id="config-hibrido" class="bg-white p-6 rounded-lg shadow mb-6 hidden text-gray-800">
+    <h2 class="text-lg font-bold mb-4 text-green-600">Configuración - Híbrido</h2>
+    {% include 'partials/parametros_hibrido.html' %}
+  </div>
+
+  <!-- Botón de ejecución -->
+  <div class="flex justify-end">
+    <button onclick="ejecutarExperimentos()" class="bg-indigo-600 hover:bg-indigo-400 text-white font-bold py-3 px-6 rounded-lg shadow">Ejecutar Experimentos</button>
+  </div>
+
+  <!-- Resultados -->
+  <!-- Resultados recientes -->
+<div id="resultados" class="mt-8 bg-gray-100 p-6 rounded-lg shadow">
+  <h2 class="text-lg font-bold mb-4 text-gray-800">Resultados del Experimento Actual</h2>
+  <div id="tabla-resultados" class="overflow-x-auto">
+    <!-- AJAX lo llenará -->
+  </div>
+</div>
+
+<!-- Historial -->
+<div class="mt-12 bg-white p-6 rounded-lg shadow border-t">
+  <h2 class="text-lg font-bold mb-4 text-gray-800">🧾 Historial de Experimentos</h2>
+  <div class="space-y-4">
+    {% for config in historial %}
+    <div class="p-4 bg-gray-50 rounded shadow-sm border">
+      <div class="flex justify-between">
+        <div>
+          <p class="font-semibold text-indigo-700">{{ config.estrategia.nombre }} ({{ config.estrategia.algoritmo }})</p>
+          <p class="text-sm text-gray-600">Instancia: {{ config.instancia.name_model.name_model }}</p>
+          <p class="text-xs text-gray-400">Fecha: {{ config.timestamp|date:"d M Y H:i" }}</p>
+        </div>
+        <button onclick="toggleParametros('{{ config.id }}')" class="bg-indigo-600 hover:bg-indigo-500 text-white text-sm px-3 py-1 rounded">Ver detalles</button>
+      </div>
+
+      <div id="parametros-{{ config.id }}" class="hidden mt-4 text-sm">
+        <p><strong>Población:</strong> {{ config.population_size }}</p>
+        <p><strong>Generaciones:</strong> {{ config.num_generations }}</p>
+        <p><strong>Mutación:</strong> {{ config.mutation_rate }}</p>
+        <p><strong>Elitismo:</strong> {{ config.use_elitism }}</p>
+        <p><strong>Tipo Mutación:</strong> {{ config.tipo_mutacion }}</p>
+        <p><strong>Estrategia 2-opt:</strong> {{ config.estrategia_2opt }}</p>
+        <p><strong>Frecuencia 2-opt:</strong> {{ config.freq_2opt }}</p>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+
+
+
+</div>
+
+<script>
+function switchTab(tab) {
+  ['ag', 'aco', 'hibrido'].forEach(t => {
+    document.getElementById(`config-${t}`).classList.add('hidden');
+  });
+  document.getElementById(`config-${tab}`).classList.remove('hidden');
+}
+
+function ejecutarExperimentos() {
+  const activeForm = document.querySelector('.bg-white:not(.hidden) form');
+  const formData = new FormData(activeForm);
+  const currentTab = activeForm.id.replace('form-', '');
+  const urlMap = {
+    ag: '/api/ejecutar_experimento_ag/',
+    aco: '/api/ejecutar_experimento_aco/',
+    hibrido: '/api/ejecutar_experimento_hibrido/'
+  };
+  fetch(urlMap[currentTab], {
+    method: 'POST',
+    body: formData
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (data.html) {
+        document.getElementById('tabla-resultados').innerHTML = data.html;
+      } else {
+        alert(data.status || data.error);
+      }
+    })
+    .catch(err => {
+      alert('Error al ejecutar el experimento.');
+      console.error(err);
+    });
+}
+
+// Esta función debe estar en el script principal, fuera del HTML dinámico
+function toggleParametros(id) {
+  const fila = document.getElementById(`parametros-${id}`);
+  if (fila) {
+    fila.classList.toggle('hidden');
+  }
+}
+</script>
+{% endblock %}

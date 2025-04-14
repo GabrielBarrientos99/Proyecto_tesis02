@@ -13,5 +13,10 @@ urlpatterns = [
     path('obtener_atributos_instancia/', views.obtener_atributos_instancia, name='obtener_atributos_instancia'),
     path('ejecutar_automatizacion/', views.ejecutar_automatizacion, name='ejecutar_automatizacion'),
     path('get-solution-details/<int:iteration_id>/', views.get_solution_details, name='get_solution_details'),
+    path('experimentos/', views.experimentos, name='experimentos'),
+    path('api/ejecutar_experimento_ag/', views.ejecutar_experimento_ag, name='ejecutar_experimento_ag'),
+    path('api/ejecutar_experimento_aco/', views.ejecutar_experimento_aco, name='ejecutar_experimento_aco'),
+    path('api/ejecutar_experimento_hibrido/', views.ejecutar_experimento_hibrido, name='ejecutar_experimento_hibrido')
+
 
 ]

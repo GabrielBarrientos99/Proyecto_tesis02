@@ -297,7 +297,8 @@ class MutationOperator:
     
     @staticmethod
     def inversion_mutation(individual):
-        """Aplica el operador de inversión a un individuo.
+        """Aplica el operador de inversión de una secuencia dentro del cromosoma
+        a un individuo.
 
         Args:
             individual (list of int): El individuo al que se aplicará el operador.
@@ -313,37 +314,33 @@ class MutationOperator:
         
     @staticmethod
     def swap_sequence_mutation(individual):
-        """Aplica el operador de secuencia de intercambio a un individuo.
-    
-        Args:
-            individual (list of int): El individuo al que se aplicará el operador.
-    
-        Returns:
-            list of int: El nuevo individuo con dos subcadenas intercambiadas.
-        """
+        """Intercambia dos subsecuencias disjuntas del individuo."""
         ind = individual.copy()
         size = len(ind)
-        if size < 2:
-            return ind  # No hay suficiente espacio para hacer intercambios significativos
-    
-        # Elegir dos puntos de inicio aleatorios
-        point1, point3 = sorted(random.sample(range(size), 2))
-    
-        # Asegurar que no seleccionamos el mismo punto para empezar
-        if point1 == point3:
-            return ind
-    
-        # Determinar los puntos finales (pueden ser diferentes)
-        point2 = random.randint(point1, size - 1)
-        point4 = random.randint(point3, size - 1)
-    
+        if size < 4:
+            return ind  # No hay espacio suficiente
+
+        # Seleccionar el primer bloque
+        point1 = random.randint(0, size - 4)
+        point2 = random.randint(point1 + 1, size - 3)
+
+        # Seleccionar el segundo bloque después del primero
+        point3 = random.randint(point2 + 1, size - 2)
+        point4 = random.randint(point3 + 1, size - 1)
+
         # Extraer las subsecuencias
         subseq1 = ind[point1:point2 + 1]
         subseq2 = ind[point3:point4 + 1]
-    
-        # Intercambiar subsecuencias y reorganizar los elementos
-        new_individual = ind[:point1] + subseq2 + ind[point2 + 1:point3] + subseq1 + ind[point4 + 1:]
-    
+
+        # Reconstruir el individuo con los bloques intercambiados
+        new_individual = (
+            ind[:point1] +
+            subseq2 +
+            ind[point2 + 1:point3] +
+            subseq1 +
+            ind[point4 + 1:]
+        )
+
         return new_individual
 
 
@@ -351,35 +348,59 @@ class MutationOperator:
 
 
 class GeneticAlgorithm:
-    def __init__(self, cvrp, population_size, num_generations, mutation_rate, use_elitism=True, gready = True ,homogenia=True,verbose=False,grafica=False):
+    def __init__(self, cvrp, population_size, num_generations, mutation_rate, use_elitism=True, gready = True ,homogenia=True,verbose=False,grafica=False, estrategia_2opt='NO_2OPT', reinicio=False, tipo_mutacion='inversion', poblacion_inicial= None,freq_2opt=10):
+        # Configuración del problema
         self.cvrp = cvrp
         self.population_size = population_size
         self.num_generations = num_generations
         self.mutation_rate = mutation_rate
+
+        # Configuración para quedarse con los mejores individuos
         self.use_elitism = use_elitism
+
+        # Configuración de la población inicial
+        self.gready = gready
         self.homogenia = homogenia
-        if gready:
+
+        # Flags para el algoritmo
+        self.estrategia_2opt = estrategia_2opt
+        self.reinicio = reinicio
+        self.tipo_mutacion = tipo_mutacion
+
+        self.freq_2opt = freq_2opt  # <--- y aquí lo guardas como atributo
+
+        if poblacion_inicial:
+            # En caso de que se pase una poblacion inicial como argumento
+            # Ejem: Resultado de algoritmo ACO
+            self.population = poblacion_inicial
+        elif gready:
+            # Si se usa el algoritmo greedy
+            # Puede ser homogénea (homogenia = True) o heterogénea (homogenia = False)
+            # generamos una población inicial homogénea: todos los individuos son iguales
+            # o una población inicial heterogénea: todos los individuos son diferentes con un swap node
             self.population = self.generate_initial_population_gready()
         else:
+            # Caso contrario, generamos una población inicial aleatoria
             self.population = self.generate_initial_population(population_size, cvrp.num_clientes)
+
+        
+        # Configuración de la clase de fitness
         self.fitness = Fitness(cvrp.matriz_distancias, cvrp.demandas, cvrp.deposito.Q)
+        self.optimizer = Optimizer(cvrp.matriz_distancias)
+
+
         self.best_fitness = float('-inf')  # Inicializar con un valor alto
         self.verbose = verbose
         self.grafica = grafica
-        self.optimizer = Optimizer(cvrp.matriz_distancias)
+        
     
     
     def generate_initial_population_gready(self):
-        population = []
-        for _ in range(self.population_size):
-            gready = GreadyAlgorithm(self.cvrp)
-            individual = gready.get_individual()
-            population.append(individual)
-
-        if self.homogenia:            
-            return population
+        individual = GreadyAlgorithm(self.cvrp).get_individual()
+        if self.homogenia:
+            return [individual] * self.population_size
         else:
-            return self.combine(population)
+            return self.combine([individual] * self.population_size)
     
     def combine(self,population):
         new_population = []
@@ -462,10 +483,23 @@ class GeneticAlgorithm:
                 parent1 = self.tournament_selection(self.population, self.fitness.normalized_fitness)
                 parent2 = self.tournament_selection(self.population, self.fitness.normalized_fitness)
                 child1, child2 = CrossoverOperator.combined_crossover_and_mutation(parent1, parent2)
-                if random.random() < self.mutation_rate:
-                    child1 = MutationOperator.inversion_mutation(child1)
-                    child2 = MutationOperator.inversion_mutation(child2)
 
+                # Aplicamos la mutación
+                if random.random() < self.mutation_rate:
+                    if self.tipo_mutacion == 'inversion':
+                        child1 = MutationOperator.inversion_mutation(child1)
+                        child2 = MutationOperator.inversion_mutation(child2)
+                    elif self.tipo_mutacion == 'swap_sequence':
+                        child1 = MutationOperator.swap_sequence_mutation(child1)
+                        child2 = MutationOperator.swap_sequence_mutation(child2)
+
+                if self.estrategia_2opt == 'EACH_GEN':
+                    rutas1 = self.fitness.decode_individual(child1)
+                    rutas2 = self.fitness.decode_individual(child2)
+                    rutas1 = self.optimizer.routes_2opt(rutas1)
+                    rutas2 = self.optimizer.routes_2opt(rutas2)
+                    child1 = [c for r in rutas1 for c in r if c != 0]
+                    child2 = [c for r in rutas2 for c in r if c != 0]
                 # Optimizamos con un algoritmo 2-opt
                 #child1 = self.optimizer.algorithm_2opt(child1)
                 new_population.append(child1)
@@ -474,7 +508,8 @@ class GeneticAlgorithm:
                 if len(new_population) < self.population_size:
                     #child2 = self.optimizer.algorithm_2opt(child2)
                     new_population.append(child2)
-
+            
+            # Actualizamos la población
             if self.use_elitism:
                 combined_population = self.population + new_population
                 combined_population.sort(key=lambda ind: self.fitness.fitness_function(ind), reverse=True)
@@ -482,16 +517,40 @@ class GeneticAlgorithm:
             else:
                 self.population = new_population.copy()
 
-            if generation % 50 == 49:
+            # Aplicamos el operador de filtrado cada 50 generaciones
+            if generation % 50 == 49 :
                 self.filtration()
 
+            if generation % self.freq_2opt == 0 and self.estrategia_2opt == 'GEN_X':
+                self.population = [[c for r in self.optimizer.routes_2opt(self.fitness.decode_individual(ind)) for c in r if c != 0] for ind in self.population]
+
+
+                    
+
+            # Calculamos la aptitud de la nueva población
             self.fitness.fit(self.population)           
 
             current_best_fitness = self.fitness.best_fitness_ind
             current_best_individual = self.fitness.best_individuo.copy()
-            current_total_cost = self.fitness.best_total_cost
+            #current_total_cost = self.fitness.best_total_cost
 
-                       
+            if self.estrategia_2opt == 'TOP_GEN':
+                # Identificar el mejor de la población
+                best_index = self.fitness.normalized_fitness.index(max(self.fitness.normalized_fitness))
+                current_best_individual = self.population[best_index]
+                
+                # Aplicar 2-opt sobre sus rutas decodificadas
+                rutas = self.fitness.decode_individual(current_best_individual)
+                rutas = self.optimizer.routes_2opt(rutas)
+                individuo_optimizado = [c for r in rutas for c in r if c != 0]
+
+                # Recalcular fitness y costo
+                current_best_fitness = self.fitness.fitness_function(individuo_optimizado)
+                #current_total_cost = self.fitness.calculate_total_cost(rutas)
+
+                # Reemplazar el mejor en la población por su versión optimizada
+                self.population[best_index] = individuo_optimizado
+
             if current_best_fitness > self.best_fitness:
                 
                 if self.verbose :
@@ -506,6 +565,15 @@ class GeneticAlgorithm:
                 if self.grafica:
                     print(f"\nGeneración {generation + 1}")
                     self.cvrp.graficar(decoded_routes)
+
+
+        if self.estrategia_2opt == 'FINAL':
+            # Aplicamos el operador de 2-opt a la mejor solución de la generación
+            rutas = self.fitness.decode_individual(self.best_individual)
+            rutas = self.optimizer.routes_2opt(rutas)
+            self.best_individual = [c for r in rutas for c in r if c != 0]
+            self.best_fitness = self.fitness.fitness_function(self.best_individual)
+            self.best_total_cost = self.fitness.calculate_total_cost(rutas)
 
         return self.fitness.best_individuo , self.fitness.best_total_cost , decoded_routes
 

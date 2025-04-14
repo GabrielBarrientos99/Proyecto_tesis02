@@ -14,7 +14,10 @@ from django.http import JsonResponse
 import matplotlib
 from .ACO import AntColonyOptimizer_v2
 matplotlib.use('Agg')
-
+import time
+from .models import ConfiguracionExperimento, ResultadoRepeticion, ResumenExperimento, EstrategiaExperimento
+from statistics import mean, stdev
+from django.template.loader import render_to_string
 
 def listar_instancias():
     instancias_dir = os.path.join(settings.BASE_DIR, 'vrp', 'static', 'instancias')
@@ -384,3 +387,335 @@ def get_solution_details(request, iteration_id):
         return JsonResponse(data)
     else:
         return JsonResponse({'error': 'Solution file not found'}, status=404)
+    
+
+def experimentos(request):
+    instancias = listar_instancias()
+    # Filtramos para evitar grupos que terminan con "-sol"
+
+    historial = ConfiguracionExperimento.objects.select_related('estrategia', 'instancia__name_model') \
+        .order_by('-timestamp')[:10]
+    
+    instancias_filtradas = {
+        categoria: archivos
+        for categoria, archivos in instancias.items()
+        if not categoria.endswith('-sol')
+    }
+
+    return render(request, 'experimentos.html', {
+        'instancias': instancias_filtradas,
+        'historial': historial
+    })
+
+
+
+@csrf_exempt
+def ejecutar_experimento_ag(request):
+    if request.method == 'POST':
+        try:
+            instancia = request.POST['instancia']
+            population_size = int(request.POST['population_size'])
+            num_generations = int(request.POST['num_generations'])
+            mutation_rate = float(request.POST['mutation_rate'])
+            use_elitism = 'use_elitism' in request.POST
+            tipo_mutacion = request.POST['tipo_mutacion']
+            estrategia_2opt = request.POST['estrategia_2opt']
+            freq_2opt = int(request.POST.get('freq_2opt', 10))
+            num_repeticiones = int(request.POST.get('num_repeticiones', 5))
+
+            # Cargar archivo
+            file_path = os.path.join(settings.BASE_DIR, 'vrp', 'static', 'instancias', instancia)
+            if not os.path.exists(file_path):
+                return JsonResponse({'error': 'Archivo de instancia no encontrado'}, status=404)
+
+            # Crear instancia CVRP
+            cvrp = CVRP(file_path=file_path)
+
+            # Crear configuración de experimento
+            estrategia, _ = EstrategiaExperimento.objects.get_or_create(nombre="AG-AUTO", algoritmo="AG")
+            vrp_instance = VRPInstance.objects.create(
+                name_model=benchmark.objects.first(),
+                population_size=population_size,
+                num_generations=num_generations,
+                mutation_rate=mutation_rate,
+                use_elitism=use_elitism,
+            )
+            config = ConfiguracionExperimento.objects.create(
+                estrategia=estrategia,
+                instancia=vrp_instance,
+                population_size=population_size,
+                num_generations=num_generations,
+                mutation_rate=mutation_rate,
+                use_elitism=use_elitism,
+                tipo_mutacion=tipo_mutacion,
+                estrategia_2opt=estrategia_2opt,
+                freq_2opt=freq_2opt,
+            )
+
+            costos = []
+            tiempos = []
+
+            for rep in range(num_repeticiones):
+                start = time.time()
+                ga = GeneticAlgorithm(
+                    cvrp=cvrp,
+                    population_size=population_size,
+                    num_generations=num_generations,
+                    mutation_rate=mutation_rate,
+                    use_elitism=use_elitism,
+                    tipo_mutacion=tipo_mutacion,
+                    verbose=False,
+                    grafica=False,
+                    freq_2opt=freq_2opt,
+                    estrategia_2opt=estrategia_2opt
+                )
+                best_ind, best_cost, rutas = ga.evolve()
+                tiempo = time.time() - start
+
+                ResultadoRepeticion.objects.create(
+                    configuracion=config,
+                    iteracion=rep+1,
+                    costo_obtenido=best_cost,
+                    tiempo_ejecucion=tiempo,
+                    mejor_ruta=rutas,
+                )
+                costos.append(best_cost)
+                tiempos.append(tiempo)
+
+            ResumenExperimento.objects.create(
+                configuracion=config,
+                promedio_costo=mean(costos),
+                tiempo_total=sum(tiempos),
+                promedio_gap=0,  # Completar si se tiene óptimo
+                mejor_resultado=min(costos),
+                desviacion_estandar=stdev(costos) if len(costos) > 1 else 0,
+            )
+
+            # al final, después de guardar los resultados:
+            html = render_to_string('partials/resultados_tabla.html', {
+                'resultados': ResultadoRepeticion.objects.filter(configuracion=config),
+                'resumen': ResumenExperimento.objects.get(configuracion=config),
+            })
+
+            return JsonResponse({'status': 'Experimento completado', 'html': html})
+
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+    else:
+        return JsonResponse({'error': 'Método no permitido'}, status=405)
+    
+
+
+@csrf_exempt
+def ejecutar_experimento_aco(request):
+    if request.method == 'POST':
+        try:
+            from .ACO import AntColonyOptimizer_v2
+            instancia = request.POST['instancia']
+            num_ants = int(request.POST['num_ants'])
+            max_iter = int(request.POST['max_iter'])
+            alpha = float(request.POST['alpha'])
+            beta = float(request.POST['beta'])
+            evaporation_rate = float(request.POST['evaporation_rate'])
+            estrategia_2opt = request.POST['estrategia_2opt']
+            usar_swap = 'usar_swap' in request.POST
+            reinicio_adaptativo = 'reinicio_adaptativo' in request.POST
+            restriccion_nodos = 'restriccion_nodos' in request.POST
+            ajuste_dinamico = 'ajuste_dinamico' in request.POST
+            num_repeticiones = int(request.POST.get('num_repeticiones', 5))
+
+            file_path = os.path.join(settings.BASE_DIR, 'vrp', 'static', 'instancias', instancia)
+            if not os.path.exists(file_path):
+                return JsonResponse({'error': 'Archivo de instancia no encontrado'}, status=404)
+
+            cvrp = CVRP(file_path=file_path)
+            estrategia, _ = EstrategiaExperimento.objects.get_or_create(nombre="ACO-AUTO", algoritmo="ACO")
+            vrp_instance = VRPInstance.objects.create(
+                name_model=benchmark.objects.first()
+            )
+            config = ConfiguracionExperimento.objects.create(
+                estrategia=estrategia,
+                instancia=vrp_instance,
+                num_ants=num_ants,
+                max_iter=max_iter,
+                alpha=alpha,
+                beta=beta,
+                evaporation_rate=evaporation_rate,
+                estrategia_2opt=estrategia_2opt,
+                usar_swap=usar_swap,
+                reinicio_adaptativo=reinicio_adaptativo,
+                restriccion_nodos=restriccion_nodos,
+                ajuste_dinamico=ajuste_dinamico,
+            )
+
+            costos, tiempos = [], []
+            for i in range(num_repeticiones):
+                start = time.time()
+                aco = AntColonyOptimizer_v2(
+                    cvrp=cvrp,
+                    num_ants=num_ants,
+                    max_iter=max_iter,
+                    alpha=alpha,
+                    beta=beta,
+                    evaporation_rate=evaporation_rate,
+                    estrategia_2opt=estrategia_2opt,
+                    usar_swap=usar_swap,
+                    reinicio_adaptativo=reinicio_adaptativo,
+                    restriccion_nodos=restriccion_nodos,
+                    ajuste_dinamico=ajuste_dinamico,
+                )
+                best_routes, best_cost = aco.train()
+                tiempo = time.time() - start
+
+                ResultadoRepeticion.objects.create(
+                    configuracion=config,
+                    iteracion=i+1,
+                    costo_obtenido=best_cost,
+                    tiempo_ejecucion=tiempo,
+                    mejor_ruta=best_routes,
+                )
+                costos.append(best_cost)
+                tiempos.append(tiempo)
+
+            ResumenExperimento.objects.create(
+                configuracion=config,
+                promedio_costo=mean(costos),
+                tiempo_total=sum(tiempos),
+                promedio_gap=0,
+                mejor_resultado=min(costos),
+                desviacion_estandar=stdev(costos) if len(costos) > 1 else 0,
+            )
+
+            return JsonResponse({'status': 'Experimento ACO completado', 'configuracion_id': config.id})
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+    else:
+        return JsonResponse({'error': 'Método no permitido'}, status=405)
+
+@csrf_exempt
+def ejecutar_experimento_hibrido(request):
+    if request.method == 'POST':
+        try:
+            # === Parámetros de ACO ===
+            instancia = request.POST['instancia']
+            num_ants = int(request.POST['aco_num_ants'])
+            max_iter = int(request.POST['aco_iter'])
+            alpha = float(request.POST['aco_alpha'])
+            beta = float(request.POST['aco_beta'])
+            evaporation_rate = float(request.POST.get('aco_evaporation_rate', 0.1))
+            estrategia_2opt = request.POST.get('estrategia_2opt', 'NO_2OPT')
+            usar_swap = 'usar_swap' in request.POST
+            reinicio_adaptativo = 'reinicio_adaptativo' in request.POST
+            restriccion_nodos = 'restriccion_nodos' in request.POST
+            ajuste_dinamico = 'ajuste_dinamico' in request.POST
+
+            # === Parámetros de AG ===
+            population_size = int(request.POST['ag_population'])
+            num_generations = int(request.POST['ag_generaciones'])
+            mutation_rate = float(request.POST['ag_mutation'])
+            use_elitism = 'elitism' in request.POST
+            tipo_mutacion = request.POST.get('tipo_mutacion', 'inversion')
+
+            num_repeticiones = int(request.POST.get('num_repeticiones', 5))
+
+            # === Archivo de instancia ===
+            file_path = os.path.join(settings.BASE_DIR, 'vrp', 'static', 'instancias', instancia)
+            if not os.path.exists(file_path):
+                return JsonResponse({'error': 'Instancia no encontrada'}, status=404)
+
+            cvrp = CVRP(file_path=file_path)
+
+            # === ACO inicial para generar población ===
+            from .ACO import AntColonyOptimizer_v2
+            aco = AntColonyOptimizer_v2(
+                cvrp=cvrp,
+                num_ants=num_ants,
+                max_iter=max_iter,
+                alpha=alpha,
+                beta=beta,
+                evaporation_rate=evaporation_rate,
+                estrategia_2opt=estrategia_2opt,
+                usar_swap=usar_swap,
+                reinicio_adaptativo=reinicio_adaptativo,
+                restriccion_nodos=restriccion_nodos,
+                ajuste_dinamico=ajuste_dinamico,
+                exportar_poblacion=True
+            )
+            _, _, poblacion_aco = aco.train()
+
+            # === Crear configuración del experimento ===
+            estrategia, _ = EstrategiaExperimento.objects.get_or_create(nombre="HIBRIDO-ACO2AG", algoritmo="HIBRIDO")
+            vrp_instance = VRPInstance.objects.create(
+                name_model=benchmark.objects.first(),
+                population_size=population_size,
+                num_generations=num_generations,
+                mutation_rate=mutation_rate,
+                use_elitism=use_elitism,
+            )
+            config = ConfiguracionExperimento.objects.create(
+                estrategia=estrategia,
+                instancia=vrp_instance,
+                population_size=population_size,
+                num_generations=num_generations,
+                mutation_rate=mutation_rate,
+                use_elitism=use_elitism,
+                tipo_mutacion=tipo_mutacion,
+                estrategia_2opt=estrategia_2opt,
+                poblacion_desde_aco=True,
+                num_ants=num_ants,
+                max_iter=max_iter,
+                alpha=alpha,
+                beta=beta,
+                evaporation_rate=evaporation_rate,
+                usar_swap=usar_swap,
+                reinicio_adaptativo=reinicio_adaptativo,
+                restriccion_nodos=restriccion_nodos,
+                ajuste_dinamico=ajuste_dinamico,
+                exportar_poblacion=True
+            )
+
+            # === Ejecutar AG con población inicial de ACO ===
+            costos, tiempos = [], []
+
+            for rep in range(num_repeticiones):
+                start = time.time()
+                ga = GeneticAlgorithm(
+                    cvrp=cvrp,
+                    population_size=population_size,
+                    num_generations=num_generations,
+                    mutation_rate=mutation_rate,
+                    use_elitism=use_elitism,
+                    tipo_mutacion=tipo_mutacion,
+                    poblacion_inicial=poblacion_aco,
+                    verbose=False,
+                    grafica=False,
+                    estrategia_2opt=estrategia_2opt
+                )
+                best_ind, best_cost, rutas = ga.evolve()
+                tiempo = time.time() - start
+
+                ResultadoRepeticion.objects.create(
+                    configuracion=config,
+                    iteracion=rep+1,
+                    costo_obtenido=best_cost,
+                    tiempo_ejecucion=tiempo,
+                    mejor_ruta=rutas,
+                )
+                costos.append(best_cost)
+                tiempos.append(tiempo)
+
+            ResumenExperimento.objects.create(
+                configuracion=config,
+                promedio_costo=mean(costos),
+                tiempo_total=sum(tiempos),
+                promedio_gap=0,
+                mejor_resultado=min(costos),
+                desviacion_estandar=stdev(costos) if len(costos) > 1 else 0,
+            )
+
+            return JsonResponse({'status': 'Experimento híbrido completado', 'configuracion_id': config.id})
+
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+    else:
+        return JsonResponse({'error': 'Método no permitido'}, status=405)

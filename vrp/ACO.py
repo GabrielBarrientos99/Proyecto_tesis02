@@ -11,7 +11,16 @@ class Ant:
         self.cost_solution = float('inf')
 
 class AntColonyOptimizer_v2:
-    def __init__(self, cvrp, num_ants, max_iter=500, max_count=20, alpha=5.0, beta=5.0, evaporation_rate=0.1, pheromone_initial=1.0, elitist_factor=6, max_r=20, verbose=False):
+    def __init__(self, cvrp, num_ants, max_iter=500, max_count=20, alpha=5.0, beta=5.0, evaporation_rate=0.1, pheromone_initial=1.0, elitist_factor=6, max_r=20, verbose=False, estrategia_2opt='NO_2OPT', usar_swap=False, reinicio_adaptativo=False,
+             restriccion_nodos=True, ajuste_dinamico=True, exportar_poblacion=False):
+        # Parámetros de entrada experimentales
+        self.estrategia_2opt= estrategia_2opt
+        self.usar_swap = usar_swap
+        self.reinicio_adaptativo = reinicio_adaptativo
+        self.restriccion_nodos = restriccion_nodos
+        self.ajuste_dinamico = ajuste_dinamico
+        self.exportar_poblacion = exportar_poblacion
+
         # Inicialización de parámetros
         self.cvrp = cvrp
         self.num_ants = num_ants
@@ -63,8 +72,12 @@ class AntColonyOptimizer_v2:
 
     def select_next_node(self, current_node, visited, q_actual, count):
         """Selecciona el siguiente nodo de entre los más cercanos no visitados que cumplan la restricción de capacidad."""
-        temp_alpha = self.alpha / 2 if count > self.max_count // 2 else self.alpha
-        temp_beta = self.beta * 1.5 if count > self.max_count // 2 else self.beta
+        if self.ajuste_dinamico and count > self.max_count // 2:
+            temp_alpha = self.alpha / 2
+            temp_beta = self.beta * 1.5
+        else:
+            temp_alpha = self.alpha
+            temp_beta = self.beta
     
         # Ajuste de número de nodos a explorar
         if count > self.max_count // 2:
@@ -79,8 +92,11 @@ class AntColonyOptimizer_v2:
         if not unvisited_nodes:
             return None
         
-        unvisited_nodes.sort(key=lambda x: x[1])
-        closest_unvisited = [node for node, _ in unvisited_nodes[:n_closest]]
+        if self.restriccion_nodos:
+            unvisited_nodes.sort(key=lambda x: x[1])
+            closest_unvisited = [node for node, _ in unvisited_nodes[:n_closest]]
+        else:
+            closest_unvisited = [node for node, _ in unvisited_nodes]
     
         probabilities = []
         for node in closest_unvisited:
@@ -139,11 +155,14 @@ class AntColonyOptimizer_v2:
             for ant in self.ants:
                 # Genera y optimiza una solución para la hormiga
                 new_solution = self.get_solution(ant.count)
-                
-                # Aplicar 2-opt y Swap Node para optimización local
-                final_solution = self.optimizer.routes_2opt(new_solution)
-                final_solution = self.optimizer.swap_nodes(final_solution)
-                
+                final_solution = new_solution
+
+                if self.estrategia_2opt == 'ALL':
+                    final_solution = self.optimizer.routes_2opt(new_solution)
+
+                elif self.estrategia_2opt == 'STUCK' and ant.count > self.max_count // 2:
+                    final_solution = self.optimizer.routes_2opt(new_solution)
+                    
                 cost_s = self.cvrp.calcular_costo_total(final_solution)
 
                 # Actualiza la mejor solución de la hormiga si mejora
@@ -155,7 +174,7 @@ class AntColonyOptimizer_v2:
                     ant.count += 1
 
                 # Reinicio de la hormiga con perturbación si no mejora tras `max_count`
-                if ant.count > self.max_count:
+                if self.reinicio_adaptativo and ant.count > self.max_count:
                     perturbed_solution = self.optimizer.swap_nodes(ant.solution)
                     ant.solution = perturbed_solution
                     ant.cost_solution = self.cvrp.calcular_costo_total(perturbed_solution)
@@ -169,5 +188,17 @@ class AntColonyOptimizer_v2:
             # Actualización de feromonas al final de cada iteración
             self.update_pheromones()
 
+        if self.estrategia_2opt == 'LAST':
+            self.best_global_solution = self.optimizer.routes_2opt(self.best_global_solution)
+            self.best_global_cost = self.cvrp.calcular_costo_total(self.best_global_solution)
+
+        if self.usar_swap:
+            self.best_global_solution = self.optimizer.swap_nodes(self.best_global_solution)
+            self.best_global_cost = self.cvrp.calcular_costo_total(self.best_global_solution)
+
         # Retorna la mejor solución global y su costo
-        return self.best_global_solution, self.best_global_cost
+        if self.exportar_poblacion:
+            poblacion = [[cliente for ruta in ant.solution for cliente in ruta] for ant in self.ants]
+            return self.best_global_solution, self.best_global_cost, poblacion
+        else:
+            return self.best_global_solution, self.best_global_cost
